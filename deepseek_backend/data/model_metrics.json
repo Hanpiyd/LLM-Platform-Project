@@ -1,0 +1,26 @@
+{
+  "Qwen2.5-7B-Instruct": {
+    "total_comparisons": 4,
+    "wins": 3,
+    "ties": 1,
+    "losses": 0,
+    "avg_rating": 3.75,
+    "last_updated": "2025-05-11T14:21:41.870271"
+  },
+  "Qwen2-1.5B-Instruct": {
+    "total_comparisons": 2,
+    "wins": 0,
+    "ties": 0,
+    "losses": 2,
+    "avg_rating": 1.5,
+    "last_updated": "2025-05-08T12:13:53.981236"
+  },
+  "Qwen3-8B": {
+    "total_comparisons": 2,
+    "wins": 0,
+    "ties": 1,
+    "losses": 1,
+    "avg_rating": 3.0,
+    "last_updated": "2025-05-11T14:21:41.870271"
+  }
+}

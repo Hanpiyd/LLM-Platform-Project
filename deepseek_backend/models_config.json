@@ -1,0 +1,44 @@
+{
+    "Qwen2.5-7B-Instruct": {
+        "name": "Qwen2.5-7B-Instruct",
+        "description": "阿里云的Qwen2.5-7B-Instruct模型",
+        "type": "api",
+        "api_provider": "siliconcloud",
+        "model_id": "Qwen/Qwen2.5-7B-Instruct"
+    },
+    "Qwen2-1.5B-Instruct": {
+        "name": "Qwen2-1.5B-Instruct",
+        "description": "阿里云的Qwen2-1.5B-Instruct模型",
+        "type": "api",
+        "api_provider": "siliconcloud",
+        "model_id": "Qwen/Qwen2-1.5B-Instruct"
+    },
+    "DeepSeek-R1-Distill-Qwen-7B": {
+        "name": "DeepSeek-R1-Distill-Qwen-7B",
+        "description": "求索对话的DeepSeek-R1-Distill-Qwen-7B模型",
+        "type": "api",
+        "api_provider": "siliconcloud",
+        "model_id": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
+    },
+    "Qwen3-8B": {
+        "name": "Qwen3-8B",
+        "description": "阿里云的Qwen3-8B模型",
+        "type": "api",
+        "api_provider": "siliconcloud",
+        "model_id": "Qwen/Qwen3-8B"
+    },
+    "internlm2_5-7b-chat": {
+        "name": "internlm2_5-7b-chat",
+        "description": "上海人工智能创新中心的internlm2_5-7b-chat模型",
+        "type": "api",
+        "api_provider": "siliconcloud",
+        "model_id": "internlm/internlm2_5-7b-chat"
+    },
+    "glm-4-9b-chat": {
+        "name": "glm-4-9b-chat",
+        "description": "智谱清言的glm-4-9b-chat模型",
+        "type": "api",
+        "api_provider": "siliconcloud",
+        "model_id": "THUDM/glm-4-9b-chat"
+    }
+}
