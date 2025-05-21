@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Send, RefreshCw, Trash, Star, CheckCircle, ArrowUpDown, AlertCircle, Settings, RotateCcw } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Send, RefreshCw, Trash, Star, CheckCircle, ArrowUpDown, AlertCircle, Settings } from 'lucide-react';
 import { modelStatusAPI, generateAPI, evaluationAPI, modelsAPI } from '../services/api';
 
 // 默认提示词
@@ -54,29 +54,37 @@ export default function LLMComparisonPlatform() {
     right: { loading: false, error: null }
   });
 
-  // 新增: 刷新模型状态函数 - 确保前端状态与后端一致
-  const refreshModelStatus = async () => {
+  // 修复：增强刷新模型状态函数 - 确保前端状态与后端一致，但避免过度刷新
+  const refreshModelStatus = useCallback(async () => {
     try {
       const response = await modelsAPI.getModels();
       if (response && response.success && response.models) {
-        const models = response.models;
+        // 更新模型选项列表
+        setModelOptions(response.models);
         
-        // 更新两侧模型的加载状态
+        // 对左右两侧模型进行状态同步
         for (let position of ['left', 'right']) {
           const currentModel = position === 'left' ? leftModel : rightModel;
-          const currentModelId = currentModel?.id;
-          
-          if (currentModelId) {
-            const modelInfo = models.find(m => m.id === currentModelId);
+          if (currentModel) {
+            const modelInfo = response.models.find(m => m.id === currentModel.id);
             
-            // 如果模型不存在或未加载，更新UI状态
-            if (!modelInfo || !modelInfo.isLoaded) {
-              console.warn(`模型${currentModelId}在${position}侧未加载或已被卸载`);
+            // 如果后端有这个模型信息
+            if (modelInfo) {
+              // 清除错误状态 - 这里不要判断位置，因为后端返回的位置可能有时候不准确
               setModelLoadingStates(prev => ({
                 ...prev,
                 [position]: { 
                   loading: false, 
-                  error: `模型${currentModelId}未加载，可能已被卸载` 
+                  error: null 
+                }
+              }));
+            } else {
+              // 模型不存在的情况
+              setModelLoadingStates(prev => ({
+                ...prev,
+                [position]: { 
+                  loading: false, 
+                  error: `模型${currentModel.id}未找到` 
                 }
               }));
             }
@@ -86,115 +94,19 @@ export default function LLMComparisonPlatform() {
     } catch (error) {
       console.error("刷新模型状态失败:", error);
     }
-  };
-
-  // 获取模型列表
-  useEffect(() => {
-    const loadModels = async () => {
-      try {
-        const response = await modelsAPI.getModels();
-        if (response && response.success && response.models) {
-          setModelOptions(response.models);
-          
-          // 找出本地模型
-          const localModel = response.models.find(model => 
-            model.type === 'unsloth' && model.is_local);
-          
-          if (localModel) {
-            setLocalModelId(localModel.id);
-          }
-          
-          // 设置默认模型 - 本地模型放在左侧，第一个API模型放在右侧
-          if (response.models.length >= 2) {
-            const localModelId = localModel?.id;
-            const apiModelId = response.models.find(model => 
-              model.id !== localModelId)?.id;
-              
-            if (localModelId) {
-              setLeftModel(localModel);
-              notifyModelChange('left', localModel, null, true);
-            } else {
-              setLeftModel(response.models[0]);
-              notifyModelChange('left', response.models[0], null, false);
-            }
-            
-            if (apiModelId) {
-              const apiModel = response.models.find(model => model.id === apiModelId);
-              setRightModel(apiModel);
-              notifyModelChange('right', apiModel, null, false);
-            } else {
-              setRightModel(response.models[1]);
-              notifyModelChange('right', response.models[1], null, false);
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Failed to load models:", error);
-        setApiStatus({
-          success: false,
-          message: '加载模型列表失败'
-        });
-      }
-    };
-    
-    loadModels();
-    
-    // 组件卸载时仅卸载API模型，本地模型保持加载
-    return () => {
-      if (leftModel && leftModel.id !== localModelId) {
-        modelStatusAPI.unloadModel(leftModel.id, 'left')
-          .catch(err => console.error('卸载左侧模型失败:', err));
-      }
-      if (rightModel && rightModel.id !== localModelId) {
-        modelStatusAPI.unloadModel(rightModel.id, 'right')
-          .catch(err => console.error('卸载右侧模型失败:', err));
-      }
-    };
-  }, []);
-
-  // 处理参数面板显示切换
-  const toggleParamsPanel = (side) => {
-    setShowParamsPanel(prev => ({
-      ...prev,
-      [side]: !prev[side]
-    }));
-  };
-
-  // 处理参数变更
-  const handleParamChange = (side, paramName, value) => {
-    setModelParams(prev => ({
-      ...prev,
-      [side]: {
-        ...prev[side],
-        [paramName]: value
-      }
-    }));
-  };
-
-  // 重置参数到默认值
-  const handleResetParams = (side) => {
-    setModelParams(prev => ({
-      ...prev,
-      [side]: {
-        temperature: 0.7,
-        top_p: 0.9,
-        max_tokens: 4096,
-        presence_penalty: 0,
-        frequency_penalty: 0,
-        thinking_mode: false
-      }
-    }));
-  };
+  }, [leftModel, rightModel]);
 
   // 处理模型选择变更，区分本地模型和API模型
-  const notifyModelChange = async (side, newModel, oldModel, isLocal = false) => {
+  const notifyModelChange = useCallback(async (side, newModel, oldModel, isLocal = false) => {
     if (!newModel || (oldModel && newModel.id === oldModel.id)) return;
+
+    console.log(`通知更改模型: ${side}侧从${oldModel?.id || '无'}切换到${newModel.id}`);
 
     // 本地模型不需要显示加载状态，只需通知后端更新位置
     if (isLocal || newModel.id === localModelId) {
       try {
         await modelStatusAPI.loadModel(newModel.id, side);
-        // 更新后刷新状态
+        // 更新后刷新状态一次即可
         await refreshModelStatus();
       } catch (error) {
         console.error(`${side}侧本地模型位置更新错误:`, error);
@@ -232,7 +144,7 @@ export default function LLMComparisonPlatform() {
         [side]: { loading: false, error: null }
       }));
       
-      // 刷新所有模型状态，确保前后端一致
+      // 刷新一次模型状态即可
       await refreshModelStatus();
     } catch (error) {
       console.error(`${side}侧模型切换错误:`, error);
@@ -248,59 +160,184 @@ export default function LLMComparisonPlatform() {
         ...prev,
         [side]: { loading: false, error: error.message || '模型加载失败' }
       }));
+      
+      // 即使出错也刷新状态一次
+      await refreshModelStatus();
     }
+  }, [localModelId, refreshModelStatus]);
+
+  // 获取模型列表
+  useEffect(() => {
+    const loadModels = async () => {
+      try {
+        const response = await modelsAPI.getModels();
+        if (response && response.success && response.models) {
+          setModelOptions(response.models);
+          
+          // 找出本地模型
+          const localModel = response.models.find(model => 
+            model.type === 'unsloth' && model.is_local);
+          
+          if (localModel) {
+            setLocalModelId(localModel.id);
+          }
+          
+          // 设置默认模型 - 本地模型放在左侧，第一个API模型放在右侧
+          if (response.models.length >= 2) {
+            const localModelId = localModel?.id;
+            const apiModelId = response.models.find(model => 
+              model.id !== localModelId)?.id;
+              
+            if (localModelId) {
+              const leftModelObj = response.models.find(m => m.id === localModelId);
+              setLeftModel(leftModelObj);
+              // 不使用notifyModelChange避免启动时触发多余操作
+            } else {
+              const leftModelObj = response.models[0];
+              setLeftModel(leftModelObj);
+              // 不使用notifyModelChange避免启动时触发多余操作
+            }
+            
+            if (apiModelId) {
+              const apiModel = response.models.find(model => model.id === apiModelId);
+              setRightModel(apiModel);
+              // 不使用notifyModelChange避免启动时触发多余操作
+            } else {
+              const rightModelObj = response.models[1];
+              setRightModel(rightModelObj);
+              // 不使用notifyModelChange避免启动时触发多余操作
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load models:", error);
+        setApiStatus({
+          success: false,
+          message: '加载模型列表失败'
+        });
+      }
+    };
+    
+    loadModels();
+    
+    // 组件卸载时仅卸载API模型，本地模型保持加载
+    return () => {
+      if (leftModel && leftModel.id !== localModelId) {
+        modelStatusAPI.unloadModel(leftModel.id, 'left')
+          .catch(err => console.error('卸载左侧模型失败:', err));
+      }
+      if (rightModel && rightModel.id !== localModelId) {
+        modelStatusAPI.unloadModel(rightModel.id, 'right')
+          .catch(err => console.error('卸载右侧模型失败:', err));
+      }
+    };
+  }, []); // 初始加载只执行一次
+
+  // 处理参数面板显示切换
+  const toggleParamsPanel = (side) => {
+    setShowParamsPanel(prev => ({
+      ...prev,
+      [side]: !prev[side]
+    }));
   };
 
-  // 处理左侧模型变化
-  // 在LLMComparisonPlatform.jsx中修改handleLeftModelChange函数
-const handleLeftModelChange = (newModelId) => {
-  const oldModel = leftModel;
-  const newModel = modelOptions.find(model => model.id === newModelId);
-  
-  // 检查右侧是否已加载相同模型
-  if (rightModel && rightModel.id === newModelId) {
-    // 显示警告，右侧模型将被卸载
-    setApiStatus({
-      success: false,
-      message: `模型${newModel.name}已在右侧加载，将优先在左侧使用`
-    });
-    
-    // 重置右侧模型，避免两侧使用同一模型
-    setRightModel(null);
-    setModelLoadingStates(prev => ({
+  // 处理参数变更
+  const handleParamChange = (side, paramName, value) => {
+    setModelParams(prev => ({
       ...prev,
-      right: { loading: false, error: null }
+      [side]: {
+        ...prev[side],
+        [paramName]: value
+      }
     }));
-  }
-  
-  setLeftModel(newModel);
-  notifyModelChange('left', newModel, oldModel, newModel.id === localModelId);
-};
+  };
 
-// 同样修改handleRightModelChange函数
-const handleRightModelChange = (newModelId) => {
-  const oldModel = rightModel;
-  const newModel = modelOptions.find(model => model.id === newModelId);
-  
-  // 检查左侧是否已加载相同模型
-  if (leftModel && leftModel.id === newModelId) {
-    // 显示警告，左侧模型将被卸载
-    setApiStatus({
-      success: false,
-      message: `模型${newModel.name}已在左侧加载，将优先在右侧使用`
-    });
+  // 重置参数到默认值
+  const handleResetParams = (side) => {
+    setModelParams(prev => ({
+      ...prev,
+      [side]: {
+        temperature: 0.7,
+        top_p: 0.9,
+        max_tokens: 4096,
+        presence_penalty: 0,
+        frequency_penalty: 0,
+        thinking_mode: false
+      }
+    }));
+  };
+
+  // 通用模型切换处理函数
+  const handleModelChange = useCallback(async (side, newModelId) => {
+    if (!newModelId) return;
     
-    // 重置左侧模型，避免两侧使用同一模型
-    setLeftModel(null);
+    const oldModel = side === 'left' ? leftModel : rightModel;
+    const newModel = modelOptions.find(model => model.id === newModelId);
+    
+    if (!newModel) {
+      console.error(`未找到ID为${newModelId}的模型`);
+      return;
+    }
+    
+    // 如果选择的是当前已有模型，不做任何操作
+    if (oldModel && oldModel.id === newModel.id) return;
+    
+    // 检查另一侧是否已加载相同模型
+    const otherSide = side === 'left' ? 'right' : 'left';
+    const otherModel = side === 'left' ? rightModel : leftModel;
+    
+    // 如果另一侧有相同模型，先解决冲突
+    if (otherModel && otherModel.id === newModel.id) {
+      // 显示警告
+      setApiStatus({
+        success: false,
+        message: `模型${newModel.name}已在${otherSide === 'left' ? '左' : '右'}侧加载，将优先在${side === 'left' ? '左' : '右'}侧使用`
+      });
+      
+      // 重置另一侧模型状态
+      if (otherSide === 'left') {
+        setLeftModel(null);
+      } else {
+        setRightModel(null);
+      }
+      
+      setModelLoadingStates(prev => ({
+        ...prev,
+        [otherSide]: { loading: false, error: null }
+      }));
+      
+      // 主动卸载另一侧的这个模型
+      await modelStatusAPI.unloadModel(newModel.id, otherSide);
+    }
+    
+    // 设置加载状态
     setModelLoadingStates(prev => ({
       ...prev,
-      left: { loading: false, error: null }
+      [side]: { loading: true, error: null }
     }));
-  }
-  
-  setRightModel(newModel);
-  notifyModelChange('right', newModel, oldModel, newModel.id === localModelId);
-};
+    
+    // 更新当前侧模型
+    if (side === 'left') {
+      setLeftModel(newModel);
+    } else {
+      setRightModel(newModel);
+    }
+    
+    // 通知后端更改模型
+    await notifyModelChange(side, newModel, oldModel, newModel.id === localModelId);
+  }, [leftModel, rightModel, modelOptions, localModelId, notifyModelChange]);
+
+  // 使用通用函数处理左侧模型变化
+  const handleLeftModelChange = useCallback((newModelId) => {
+    console.log("左侧切换到模型:", newModelId);
+    handleModelChange('left', newModelId);
+  }, [handleModelChange]);
+
+  // 使用通用函数处理右侧模型变化
+  const handleRightModelChange = useCallback((newModelId) => {
+    console.log("右侧切换到模型:", newModelId);
+    handleModelChange('right', newModelId);
+  }, [handleModelChange]);
 
   // 创建模型参数控制面板组件
   const ModelParamsPanel = ({ side, params, onChange, isLocalModel }) => {
@@ -428,7 +465,7 @@ const handleRightModelChange = (newModelId) => {
     );
   };
 
-  // 渲染模型选择器 - 包含参数控制面板
+  // 渲染模型选择器 - 下拉列表条件
   const renderModelSelector = (side, model, handleChange, loadingState) => {
     const isLocalModel = model?.id === localModelId;
     
@@ -446,9 +483,9 @@ const handleRightModelChange = (newModelId) => {
           <select
             value={model?.id || ''}
             onChange={(e) => handleChange(e.target.value)}
-            disabled={!isLocalModel && loadingState.loading || !modelOptions.length}
+            disabled={((!isLocalModel) && loadingState.loading) || !modelOptions.length}
             className={`w-full p-4 border rounded-lg appearance-none focus:ring-2 focus:border-transparent cursor-pointer text-center
-              ${!isLocalModel && loadingState.loading 
+              ${(!isLocalModel) && loadingState.loading 
                 ? 'bg-gray-100 text-gray-500 border-gray-300' 
                 : loadingState.error
                   ? 'bg-red-50 text-red-800 border-red-200 focus:ring-red-500'
@@ -458,26 +495,27 @@ const handleRightModelChange = (newModelId) => {
               }`}
           >
             {!modelOptions.length && <option value="">加载中...</option>}
+            {!model && <option value="">选择模型...</option>}
             {modelOptions.map(modelOption => {
-              const isLoadedInOtherSide = side === 'left' 
+              const isLoadedInOtherSide = (side === 'left' 
                 ? rightModel?.id === modelOption.id 
-                : leftModel?.id === modelOption.id;
+                : leftModel?.id === modelOption.id) && model?.id !== modelOption.id;
                 
               return (
                 <option 
                   key={modelOption.id} 
                   value={modelOption.id}
-                  disabled={isLoadedInOtherSide && modelOption.id !== model?.id}
+                  disabled={isLoadedInOtherSide}
                 >
                   {modelOption.name} 
                   {modelOption.id === localModelId ? '(本地)' : ''}
-                  {isLoadedInOtherSide && modelOption.id !== model?.id ? ' (已在另一侧加载)' : ''}
+                  {isLoadedInOtherSide ? ' (已在另一侧加载)' : ''}
                 </option>
               );
             })}
           </select>
           <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-            {!isLocalModel && loadingState.loading ? (
+            {(!isLocalModel) && loadingState.loading ? (
               <RefreshCw size={18} className="text-gray-500 animate-spin" />
             ) : loadingState.error ? (
               <AlertCircle size={18} className="text-red-500" />
@@ -490,7 +528,7 @@ const handleRightModelChange = (newModelId) => {
         </div>
         
         {/* 只为非本地模型显示加载状态 */}
-        {!isLocalModel && loadingState.loading && (
+        {(!isLocalModel) && loadingState.loading && (
           <p className="mt-2 text-sm text-gray-600 flex items-center justify-center">
             <RefreshCw size={14} className="animate-spin mr-1" /> 模型加载中...
           </p>
@@ -521,7 +559,7 @@ const handleRightModelChange = (newModelId) => {
         </div>
         
         {/* 参数面板 */}
-        {showParamsPanel[side] && !(!model) && (
+        {showParamsPanel[side] && model && (
           <ModelParamsPanel 
             side={side} 
             params={modelParams[side]} 
@@ -533,14 +571,14 @@ const handleRightModelChange = (newModelId) => {
     );
   };
 
-  // 处理提交问题
+  // 处理提交问题前检查模型状态
   const handleSubmit = async () => {
     if (!userQuestion.trim()) return;
     
-    // 新增：在提交前刷新模型状态，确保前后端一致
+    // 在提交前刷新模型状态
     await refreshModelStatus();
     
-    // 新增更强的验证逻辑
+    // 强化的验证逻辑
     if (!leftModel || !rightModel) {
       setApiStatus({
         success: false,
