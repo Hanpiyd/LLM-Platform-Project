@@ -91,7 +91,18 @@ class UnslothModel:
                 prompt = user_question
             
             formatted_prompt = prompt
-            inputs = self.tokenizer(formatted_prompt, return_tensors = "pt").to(self.model.device)
+            message = [
+                {
+                    "role" : "user",
+                    "content" : formatted_prompt 
+                }
+            ]
+            text = self.tokenizer.apply_chat_template(
+                message,
+                tokenize = False,
+                add_generation_prompt = True
+            )
+            inputs = self.tokenizer([text], return_tensors = "pt").to(self.model.device)
             
             gen_params = {
                 "max_new_tokens": self.config.get("max_new_tokens", DEFAULT_MAX_NEW_TOKENS),
@@ -101,17 +112,15 @@ class UnslothModel:
                 "do_sample": self.config.get("do_sample", True)
             }
             with torch.no_grad():
-                outputs = self.model.generate(
+                generated_ids = self.model.generate(
                     **inputs,
                     **gen_params
                 )
-            input_length = inputs["input_ids"].shape[1]
-            generated_text = self.tokenizer.decode(
-                outputs[0][input_length:], 
-                skip_special_tokens=True
-            )
-            self.last_token_count = outputs.shape[1]
-            return generated_text.strip()
+            generated_ids = [
+                output_ids[len(input_ids):] for input_ids, output_ids in zip(inputs.input_ids, generated_ids)
+            ]
+            content = self.tokenizer.batch_decode(generated_ids, skip_special_tokens = True)[0]
+            return content
         
         except Exception as e:
             logger.error(f"Error generating response with {self.model_name}: {str(e)}")
