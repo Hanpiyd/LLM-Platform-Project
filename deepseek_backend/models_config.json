@@ -40,5 +40,14 @@
         "type": "api",
         "api_provider": "siliconcloud",
         "model_id": "THUDM/glm-4-9b-chat"
+    },
+    "qwen2.5-3B-finetuned": {
+        "name": "Qwen2.5-3B-Finetuned",
+        "description": "微调后的Qwen2.5-3B模型，相比原模型有更出色的学术论文写作润色能力",
+        "type": "unsloth",
+        "model_path": "/media/jyh/09e3ad80-13b7-403c-907b-75fe5213b4d4/Downloads/exp5_3b_8000_hf/250421_exp5_8000",
+        "max_seq_length": 8192,
+        "load_in_4bit": true,
+        "is_local": true
     }
 }
